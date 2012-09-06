@@ -19,46 +19,27 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#ifndef NODE_IO_H_
-#define NODE_IO_H_
+var common = require('../common');
+var assert = require('assert');
+var child_process = require('child_process');
 
-#include "node_object_wrap.h"
-#include "uv-private/ev.h"
+function test(fun, code) {
+  var errors = 0;
 
-namespace node {
+  fun('does-not-exist', function(err) {
+    assert.equal(err.code, code);
+    errors++;
+  });
 
-class IOWatcher : ObjectWrap {
- public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  process.on('exit', function() {
+    assert.equal(errors, 1);
+  });
+}
 
- protected:
-  static v8::Persistent<v8::FunctionTemplate> constructor_template;
+if (process.platform === 'win32') {
+  test(child_process.exec, 1); // exit code of cmd.exe
+} else {
+  test(child_process.exec, 127); // exit code of /bin/sh
+}
 
-  IOWatcher() : ObjectWrap() {
-    ev_init(&watcher_, IOWatcher::Callback);
-    watcher_.data = this;
-  }
-
-  ~IOWatcher() {
-    ev_io_stop(EV_DEFAULT_UC_ &watcher_);
-    assert(!ev_is_active(&watcher_));
-    assert(!ev_is_pending(&watcher_));
-  }
-
-  static v8::Handle<v8::Value> New(const v8::Arguments& args);
-  static v8::Handle<v8::Value> Start(const v8::Arguments& args);
-  static v8::Handle<v8::Value> Stop(const v8::Arguments& args);
-  static v8::Handle<v8::Value> Set(const v8::Arguments& args);
-
- private:
-  static void Callback(EV_P_ ev_io *watcher, int revents);
-
-  void Start();
-  void Stop();
-
-  ev_io watcher_;
-};
-
-}  // namespace node
-#endif  // NODE_IO_H_
-
+test(child_process.execFile, 'ENOENT');

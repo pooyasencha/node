@@ -19,44 +19,41 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#ifndef NODE_SIGNAL_WATCHER_H_
-#define NODE_SIGNAL_WATCHER_H_
+var common = require('../common');
+var assert = require('assert');
+var http = require('http');
 
-#include "node.h"
-#include "v8.h"
-#include "uv-private/ev.h"
+http.createServer(onRequest).listen(common.PORT, onListen);
 
-namespace node {
+function onRequest(req, res) {
+  var gotEnd = 0;
 
-class SignalWatcher : ObjectWrap {
- public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  res.on('close', assert.fail);
 
- protected:
-  static v8::Persistent<v8::FunctionTemplate> constructor_template;
+  res.on('end', function() {
+    gotEnd++;
+  });
 
-  SignalWatcher(int sig) : ObjectWrap() {
-    ev_signal_init(&watcher_, SignalWatcher::Callback, sig);
-    watcher_.data = this;
-  }
+  process.on('exit', function() {
+    assert.equal(gotEnd, 1);
+  });
 
-  ~SignalWatcher() {
-    ev_signal_stop(EV_DEFAULT_UC_ &watcher_);
-  }
+  res.writeHead(200);
+  res.end();
+  this.close();
+}
 
-  static v8::Handle<v8::Value> New(const v8::Arguments& args);
-  static v8::Handle<v8::Value> Start(const v8::Arguments& args);
-  static v8::Handle<v8::Value> Stop(const v8::Arguments& args);
+function onListen() {
+  var req = http.get('http://127.0.0.1:' + common.PORT);
+  var gotEnd = 0;
 
- private:
-  static void Callback(EV_P_ ev_signal *watcher, int revents);
+  req.on('close', assert.fail);
 
-  void Start();
-  void Stop();
+  req.on('end', function() {
+    gotEnd++;
+  });
 
-  ev_signal watcher_;
-};
-
-}  // namespace node
-#endif  // NODE_SIGNAL_WATCHER_H_
-
+  process.on('exit', function() {
+    assert.equal(gotEnd, 1);
+  });
+}
