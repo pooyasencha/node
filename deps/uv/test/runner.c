@@ -24,6 +24,7 @@
 
 #include "runner.h"
 #include "task.h"
+#include "uv.h"
 
 char executable_path[PATHMAX] = { '\0' };
 
@@ -38,10 +39,18 @@ static void log_progress(int total, int passed, int failed, const char* name) {
 
 
 const char* fmt(double d) {
+  static char buf[1024];
+  static char* p;
   uint64_t v;
-  char* p;
 
-  p = (char *) calloc(1, 32) + 31; /* leaks memory */
+  if (p == NULL)
+    p = buf;
+
+  p += 31;
+
+  if (p >= buf + sizeof(buf))
+    return "<buffer too small>";
+
   v = (uint64_t) d;
 
 #if 0 /* works but we don't care about fractional precision */
@@ -147,7 +156,8 @@ int run_test(const char* test, int timeout, int benchmark_output) {
 
     if (process_start(task->task_name,
                       task->process_name,
-                      &processes[process_count]) == -1) {
+                      &processes[process_count],
+                      1 /* is_helper */) == -1) {
       snprintf(errmsg,
                sizeof errmsg,
                "Process `%s` failed to start.",
@@ -173,7 +183,8 @@ int run_test(const char* test, int timeout, int benchmark_output) {
 
     if (process_start(task->task_name,
                       task->process_name,
-                      &processes[process_count]) == -1) {
+                      &processes[process_count],
+                      0 /* !is_helper */) == -1) {
       snprintf(errmsg,
                sizeof errmsg,
                "Process `%s` failed to start.",
@@ -291,11 +302,13 @@ out:
  */
 int run_test_part(const char* test, const char* part) {
   task_entry_t* task;
+  int r;
 
   for (task = TASKS; task->main; task++) {
-    if (strcmp(test, task->task_name) == 0
-        && strcmp(part, task->process_name) == 0) {
-      return task->main();
+    if (strcmp(test, task->task_name) == 0 &&
+        strcmp(part, task->process_name) == 0) {
+      r = task->main();
+      return r;
     }
   }
 

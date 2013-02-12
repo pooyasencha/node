@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 
 import errno
-import json
+
+try:
+  import json
+except ImportError:
+  import simplejson as json
+
 import os
 import re
 import shutil
@@ -114,27 +119,6 @@ def npm_files(action):
     assert(0) # unhandled action type
 
 def files(action):
-  action(['deps/uv/include/uv.h',
-          'deps/v8/include/v8-debug.h',
-          'deps/v8/include/v8-preparser.h',
-          'deps/v8/include/v8-profiler.h',
-          'deps/v8/include/v8-testing.h',
-          'deps/v8/include/v8.h',
-          'deps/v8/include/v8stdint.h',
-          'src/eio-emul.h',
-          'src/ev-emul.h',
-          'src/node.h',
-          'src/node_buffer.h',
-          'src/node_object_wrap.h',
-          'src/node_version.h'],
-          'include/node/')
-  action(['deps/uv/include/uv-private/eio.h',
-          'deps/uv/include/uv-private/ev.h',
-          'deps/uv/include/uv-private/ngx-queue.h',
-          'deps/uv/include/uv-private/tree.h',
-          'deps/uv/include/uv-private/uv-unix.h',
-          'deps/uv/include/uv-private/uv-win.h'],
-          'include/node/uv-private/')
   action(['doc/node.1'], 'share/man/man1/')
   action(['out/Release/node'], 'bin/node')
 
@@ -142,6 +126,11 @@ def files(action):
   # work when cross-compiling and besides, there's at least one linux flavor
   # with dtrace support now (oracle's "unbreakable" linux)
   action(['src/node.d'], 'lib/dtrace/')
+
+  if 'freebsd' in sys.platform or 'openbsd' in sys.platform:
+    action(['doc/node.1'], 'man/man1/')
+  else:
+    action(['doc/node.1'], 'share/man/man1/')
 
   if 'true' == variables.get('node_install_npm'): npm_files(action)
 

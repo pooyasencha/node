@@ -6,15 +6,12 @@
           '_LARGEFILE_SOURCE',
           '_FILE_OFFSET_BITS=64',
           '_GNU_SOURCE',
-          'EIO_STACKSIZE=262144'
         ],
         'conditions': [
           ['OS=="solaris"', {
-            'cflags': ['-pthreads'],
-            'ldlags': ['-pthreads'],
+            'cflags': [ '-pthreads' ],
           }, {
-            'cflags': ['-pthread'],
-            'ldlags': ['-pthread'],
+            'cflags': [ '-pthread' ],
           }],
         ],
       }],
@@ -23,7 +20,7 @@
 
   'targets': [
     {
-      'target_name': 'uv',
+      'target_name': 'libuv',
       'type': '<(library)',
       'include_dirs': [
         'include',
@@ -33,12 +30,23 @@
       'direct_dependent_settings': {
         'include_dirs': [ 'include' ],
         'conditions': [
-          ['OS=="linux"', {
-            'libraries': [ '-ldl' ],
+          ['OS != "win"', {
+            'defines': [
+              '_LARGEFILE_SOURCE',
+              '_FILE_OFFSET_BITS=64',
+            ],
+          }],
+          ['OS == "mac"', {
+            'defines': [ '_DARWIN_USE_64_BIT_INODE=1' ],
+          }],
+          ['OS == "linux"', {
+            'defines': [ '_POSIX_C_SOURCE=200112' ],
           }],
         ],
       },
-
+      'defines': [
+        'HAVE_CONFIG_H'
+      ],
       'sources': [
         'common.gypi',
         'include/uv.h',
@@ -53,7 +61,6 @@
         [ 'OS=="win"', {
           'defines': [
             '_WIN32_WINNT=0x0600',
-            'EIO_STACKSIZE=262144',
             '_GNU_SOURCE',
           ],
           'sources': [
@@ -108,8 +115,6 @@
             '-Wno-unused-parameter'
           ],
           'sources': [
-            'include/uv-private/eio.h',
-            'include/uv-private/ev.h',
             'include/uv-private/uv-unix.h',
             'include/uv-private/uv-linux.h',
             'include/uv-private/uv-sunos.h',
@@ -118,15 +123,9 @@
             'src/unix/async.c',
             'src/unix/core.c',
             'src/unix/dl.c',
-            'src/unix/eio/ecb.h',
-            'src/unix/eio/eio.c',
-            'src/unix/eio/xthread.h',
             'src/unix/error.c',
-            'src/unix/ev/ev.c',
-            'src/unix/ev/ev_vars.h',
-            'src/unix/ev/ev_wrap.h',
-            'src/unix/ev/event.h',
             'src/unix/fs.c',
+            'src/unix/getaddrinfo.c',
             'src/unix/internal.h',
             'src/unix/loop.c',
             'src/unix/loop-watcher.c',
@@ -137,26 +136,36 @@
             'src/unix/stream.c',
             'src/unix/tcp.c',
             'src/unix/thread.c',
+            'src/unix/threadpool.c',
             'src/unix/timer.c',
             'src/unix/tty.c',
             'src/unix/udp.c',
-            'src/unix/uv-eio.c',
-            'src/unix/uv-eio.h',
           ],
-          'include_dirs': [ 'src/unix/ev', ],
-          'libraries': [ '-lm' ]
+          'link_settings': {
+            'libraries': [ '-lm' ],
+            'conditions': [
+              ['OS=="solaris"', {
+                'ldflags': [ '-pthreads' ],
+              }, {
+                'ldflags': [ '-pthread' ],
+              }],
+            ],
+          },
+          'conditions': [
+            ['"<(library)" == "shared_library"', {
+              'cflags': [ '-fPIC' ],
+            }],
+          ],
         }],
         [ 'OS=="mac"', {
-          'sources': [ 'src/unix/darwin.c' ],
-          'direct_dependent_settings': {
+          'sources': [ 'src/unix/darwin.c', 'src/unix/fsevents.c' ],
+          'link_settings': {
             'libraries': [
               '$(SDKROOT)/System/Library/Frameworks/CoreServices.framework',
             ],
           },
           'defines': [
             '_DARWIN_USE_64_BIT_INODE=1',
-            'EV_CONFIG_H="config_darwin.h"',
-            'EIO_CONFIG_H="config_darwin.h"',
           ]
         }],
         [ 'OS=="linux"', {
@@ -166,12 +175,8 @@
             'src/unix/linux/syscalls.c',
             'src/unix/linux/syscalls.h',
           ],
-          'defines': [
-            'EV_CONFIG_H="config_linux.h"',
-            'EIO_CONFIG_H="config_linux.h"',
-          ],
-          'direct_dependent_settings': {
-            'libraries': [ '-lrt' ],
+          'link_settings': {
+            'libraries': [ '-ldl', '-lrt' ],
           },
         }],
         [ 'OS=="solaris"', {
@@ -179,24 +184,32 @@
           'defines': [
             '__EXTENSIONS__',
             '_XOPEN_SOURCE=500',
-            'EV_CONFIG_H="config_sunos.h"',
-            'EIO_CONFIG_H="config_sunos.h"',
           ],
-          'direct_dependent_settings': {
+          'link_settings': {
             'libraries': [
               '-lkstat',
-              '-lsocket',
               '-lnsl',
+              '-lsendfile',
+              '-lsocket',
             ],
           },
         }],
-        [ 'OS=="freebsd"', {
-          'sources': [ 'src/unix/freebsd.c' ],
+        [ 'OS=="aix"', {
+          'include_dirs': [ 'src/ares/config_aix' ],
+          'sources': [ 'src/unix/aix.c' ],
           'defines': [
-            'EV_CONFIG_H="config_freebsd.h"',
-            'EIO_CONFIG_H="config_freebsd.h"',
+            '_ALL_SOURCE',
+            '_XOPEN_SOURCE=500',
           ],
-          'direct_dependent_settings': {
+          'link_settings': {
+            'libraries': [
+              '-lperfstat',
+            ],
+          },
+        }],
+        [ 'OS=="freebsd" or OS=="dragonflybsd"', {
+          'sources': [ 'src/unix/freebsd.c' ],
+          'link_settings': {
             'libraries': [
               '-lkvm',
             ],
@@ -204,21 +217,28 @@
         }],
         [ 'OS=="openbsd"', {
           'sources': [ 'src/unix/openbsd.c' ],
-          'defines': [
-            'EV_CONFIG_H="config_openbsd.h"',
-            'EIO_CONFIG_H="config_openbsd.h"',
-          ],
         }],
-        [ 'OS=="mac" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd"', {
+        [ 'OS=="netbsd"', {
+          'sources': [ 'src/unix/netbsd.c' ],
+          'link_settings': {
+            'libraries': [
+              '-lkvm',
+            ],
+          },
+        }],
+        [ 'OS in "mac freebsd dragonflybsd openbsd netbsd".split()', {
           'sources': [ 'src/unix/kqueue.c' ],
         }],
+        ['library=="shared_library"', {
+          'defines': [ 'BUILDING_UV_SHARED=1' ]
+        }]
       ]
     },
 
     {
       'target_name': 'run-tests',
       'type': 'executable',
-      'dependencies': [ 'uv' ],
+      'dependencies': [ 'libuv' ],
       'sources': [
         'test/blackhole-server.c',
         'test/echo-server.c',
@@ -236,6 +256,7 @@
         'test/test-cwd-and-chdir.c',
         'test/test-delayed-accept.c',
         'test/test-error.c',
+        'test/test-embed.c',
         'test/test-fail-always.c',
         'test/test-fs.c',
         'test/test-fs-event.c',
@@ -260,11 +281,13 @@
         'test/test-poll-close.c',
         'test/test-process-title.c',
         'test/test-ref.c',
+        'test/test-run-nowait.c',
         'test/test-run-once.c',
         'test/test-semaphore.c',
         'test/test-shutdown-close.c',
         'test/test-shutdown-eof.c',
         'test/test-signal.c',
+        'test/test-signal-multiple-loops.c',
         'test/test-spawn.c',
         'test/test-fs-poll.c',
         'test/test-stdio-over-pipes.c',
@@ -278,19 +301,23 @@
         'test/test-tcp-connect-error.c',
         'test/test-tcp-connect-timeout.c',
         'test/test-tcp-connect6-error.c',
-        'test/test-tcp-write-error.c',
+        'test/test-tcp-open.c',
         'test/test-tcp-write-to-half-open-connection.c',
         'test/test-tcp-writealot.c',
         'test/test-tcp-unexpected-read.c',
+        'test/test-tcp-read-stop.c',
         'test/test-threadpool.c',
+        'test/test-threadpool-cancel.c',
         'test/test-mutexes.c',
-        'test/test-signal.c',
         'test/test-thread.c',
+        'test/test-barrier.c',
+        'test/test-condvar.c',
         'test/test-timer-again.c',
         'test/test-timer.c',
         'test/test-tty.c',
         'test/test-udp-dgram-too-big.c',
         'test/test-udp-ipv6.c',
+        'test/test-udp-open.c',
         'test/test-udp-options.c',
         'test/test-udp-send-and-recv.c',
         'test/test-udp-multicast-join.c',
@@ -317,6 +344,12 @@
             '_XOPEN_SOURCE=500',
           ],
         }],
+        [ 'OS=="aix"', {     # make test-fs.c compile, needs _POSIX_C_SOURCE
+          'defines': [
+            '_ALL_SOURCE',
+            '_XOPEN_SOURCE=500',
+          ],
+        }],
       ],
       'msvs-settings': {
         'VCLinkerTool': {
@@ -328,7 +361,7 @@
     {
       'target_name': 'run-benchmarks',
       'type': 'executable',
-      'dependencies': [ 'uv' ],
+      'dependencies': [ 'libuv' ],
       'sources': [
         'test/benchmark-async.c',
         'test/benchmark-async-pummel.c',
@@ -336,7 +369,9 @@
         'test/benchmark-getaddrinfo.c',
         'test/benchmark-list.h',
         'test/benchmark-loop-count.c',
+        'test/benchmark-million-async.c',
         'test/benchmark-million-timers.c',
+        'test/benchmark-multi-accept.c',
         'test/benchmark-ping-pongs.c',
         'test/benchmark-pound.c',
         'test/benchmark-pump.c',

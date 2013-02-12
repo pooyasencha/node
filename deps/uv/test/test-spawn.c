@@ -106,7 +106,7 @@ static uv_buf_t on_alloc(uv_handle_t* handle, size_t suggested_size) {
 }
 
 
-void on_read(uv_stream_t* tcp, ssize_t nread, uv_buf_t buf) {
+static void on_read(uv_stream_t* tcp, ssize_t nread, uv_buf_t buf) {
   uv_err_t err = uv_last_error(uv_default_loop());
 
   if (nread > 0) {
@@ -118,7 +118,7 @@ void on_read(uv_stream_t* tcp, ssize_t nread, uv_buf_t buf) {
 }
 
 
-void write_cb(uv_write_t* req, int status) {
+static void write_cb(uv_write_t* req, int status) {
   ASSERT(status == 0);
   uv_close((uv_handle_t*)req->handle, close_cb);
 }
@@ -150,8 +150,10 @@ TEST_IMPL(spawn_fails) {
   options.file = options.args[0] = "program-that-had-better-not-exist";
   ASSERT(0 == uv_spawn(uv_default_loop(), &process, options));
   ASSERT(0 != uv_is_active((uv_handle_t*)&process));
-  ASSERT(0 == uv_run(uv_default_loop()));
+  ASSERT(0 == uv_run(uv_default_loop(), UV_RUN_DEFAULT));
   ASSERT(uv_last_error(uv_default_loop()).code == UV_ENOENT);
+
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -164,12 +166,13 @@ TEST_IMPL(spawn_exit_code) {
   r = uv_spawn(uv_default_loop(), &process, options);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 1);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -194,7 +197,7 @@ TEST_IMPL(spawn_stdout) {
   r = uv_read_start((uv_stream_t*) &out, on_alloc, on_read);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
@@ -202,6 +205,7 @@ TEST_IMPL(spawn_stdout) {
   printf("output is: %s", output);
   ASSERT(strcmp("hello world\n", output) == 0);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -233,7 +237,7 @@ TEST_IMPL(spawn_stdout_to_file) {
   r = uv_spawn(uv_default_loop(), &process, options);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
@@ -254,6 +258,7 @@ TEST_IMPL(spawn_stdout_to_file) {
   /* Cleanup. */
   unlink("stdout_file");
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -289,13 +294,14 @@ TEST_IMPL(spawn_stdin) {
   r = uv_read_start((uv_stream_t*) &out, on_alloc, on_read);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 3); /* Once for process twice for the pipe. */
   ASSERT(strcmp(buffer, output) == 0);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -322,7 +328,7 @@ TEST_IMPL(spawn_stdio_greater_than_3) {
   r = uv_read_start((uv_stream_t*) &pipe, on_alloc, on_read);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
@@ -330,6 +336,7 @@ TEST_IMPL(spawn_stdio_greater_than_3) {
   printf("output from stdio[3] is: %s", output);
   ASSERT(strcmp("fourth stdio!\n", output) == 0);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -345,12 +352,13 @@ TEST_IMPL(spawn_ignored_stdio) {
   r = uv_spawn(uv_default_loop(), &process, options);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 1);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -369,14 +377,56 @@ TEST_IMPL(spawn_and_kill) {
   r = uv_timer_start(&timer, timer_cb, 500, 0);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 2); /* Once for process and once for timer. */
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
+
+
+TEST_IMPL(spawn_preserve_env) {
+  int r;
+  uv_pipe_t out;
+  uv_stdio_container_t stdio[2];
+
+  init_process_options("spawn_helper7", exit_cb);
+
+  uv_pipe_init(uv_default_loop(), &out, 0);
+  options.stdio = stdio;
+  options.stdio[0].flags = UV_IGNORE;
+  options.stdio[1].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
+  options.stdio[1].data.stream = (uv_stream_t*) &out;
+  options.stdio_count = 2;
+
+  r = putenv("ENV_TEST=testval");
+  ASSERT(r == 0);
+
+  /* Explicitly set options.env to NULL to test for env clobbering. */
+  options.env = NULL;
+
+  r = uv_spawn(uv_default_loop(), &process, options);
+  ASSERT(r == 0);
+
+  r = uv_read_start((uv_stream_t*) &out, on_alloc, on_read);
+  ASSERT(r == 0);
+
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+  ASSERT(r == 0);
+
+  ASSERT(exit_cb_called == 1);
+  ASSERT(close_cb_called == 2);
+
+  printf("output is: %s", output);
+  ASSERT(strcmp("testval", output) == 0);
+
+  MAKE_VALGRIND_HAPPY();
+  return 0;
+}
+
 
 TEST_IMPL(spawn_detached) {
   int r;
@@ -391,7 +441,7 @@ TEST_IMPL(spawn_detached) {
 
   uv_unref((uv_handle_t*)&process);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 0);
@@ -402,6 +452,7 @@ TEST_IMPL(spawn_detached) {
   err = uv_kill(process.pid, 15);
   ASSERT(err.code == 0);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -453,12 +504,13 @@ TEST_IMPL(spawn_and_kill_with_std) {
   r = uv_timer_start(&timer, timer_cb, 500, 0);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 5); /* process x 1, timer x 1, stdio x 3. */
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -499,12 +551,13 @@ TEST_IMPL(spawn_and_ping) {
 
   ASSERT(exit_cb_called == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(strcmp(output, "TEST") == 0);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -532,12 +585,13 @@ TEST_IMPL(kill) {
   err = uv_kill(process.pid, /* SIGTERM */ 15);
   ASSERT(err.code == UV_OK);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 1);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -577,7 +631,7 @@ TEST_IMPL(spawn_detect_pipe_name_collisions_on_windows) {
   r = uv_read_start((uv_stream_t*) &out, on_alloc, on_read);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
@@ -585,6 +639,7 @@ TEST_IMPL(spawn_detect_pipe_name_collisions_on_windows) {
   printf("output is: %s", output);
   ASSERT(strcmp("hello world\n", output) == 0);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -738,12 +793,13 @@ TEST_IMPL(spawn_setuid_setgid) {
   r = uv_spawn(uv_default_loop(), &process, options);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 1);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 #endif
@@ -771,12 +827,13 @@ TEST_IMPL(spawn_setuid_fails) {
   r = uv_spawn(uv_default_loop(), &process, options);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 1);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -802,12 +859,13 @@ TEST_IMPL(spawn_setgid_fails) {
   r = uv_spawn(uv_default_loop(), &process, options);
   ASSERT(r == 0);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 1);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 #endif
@@ -834,11 +892,12 @@ TEST_IMPL(spawn_setuid_fails) {
   ASSERT(r == -1);
   ASSERT(uv_last_error(uv_default_loop()).code == UV_ENOTSUP);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(close_cb_called == 0);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 
@@ -855,11 +914,12 @@ TEST_IMPL(spawn_setgid_fails) {
   ASSERT(r == -1);
   ASSERT(uv_last_error(uv_default_loop()).code == UV_ENOTSUP);
 
-  r = uv_run(uv_default_loop());
+  r = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   ASSERT(r == 0);
 
   ASSERT(close_cb_called == 0);
 
+  MAKE_VALGRIND_HAPPY();
   return 0;
 }
 #endif

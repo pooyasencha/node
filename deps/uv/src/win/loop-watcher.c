@@ -27,7 +27,7 @@
 
 
 void uv_loop_watcher_endgame(uv_loop_t* loop, uv_handle_t* handle) {
-  if (handle->flags & UV_HANDLE_CLOSING) {
+  if (handle->flags & UV__HANDLE_CLOSING) {
     assert(!(handle->flags & UV_HANDLE_CLOSED));
     handle->flags |= UV_HANDLE_CLOSED;
     uv__handle_close(handle);
@@ -51,6 +51,9 @@ void uv_loop_watcher_endgame(uv_loop_t* loop, uv_handle_t* handle) {
                                                                               \
     if (handle->flags & UV_HANDLE_ACTIVE)                                     \
       return 0;                                                               \
+                                                                              \
+    if (cb == NULL)                                                           \
+      return uv__set_artificial_error(handle->loop, UV_EINVAL);               \
                                                                               \
     old_head = loop->name##_handles;                                          \
                                                                               \

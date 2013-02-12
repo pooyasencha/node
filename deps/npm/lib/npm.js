@@ -87,6 +87,7 @@ var commandCache = {}
               , "ll" : "ls"
               , "ln" : "link"
               , "i" : "install"
+              , "isntall" : "install"
               , "up" : "update"
               , "c" : "config"
               , "info" : "view"
@@ -96,6 +97,7 @@ var commandCache = {}
               , "se" : "search"
               , "author" : "owner"
               , "home" : "docs"
+              , "issues": "bugs"
               , "unstar": "star" // same function
               , "apihelp" : "help"
               , "login": "adduser"
@@ -323,7 +325,7 @@ function load (npm, cli, cb) {
         }
       }
 
-      var umask = parseInt(cli.umask, 8)
+      var umask = npm.config.get("umask")
       npm.modes = { exec: 0777 & (~umask)
                   , file: 0666 & (~umask)
                   , umask: umask }

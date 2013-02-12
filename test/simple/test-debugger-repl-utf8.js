@@ -20,6 +20,7 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
+process.env.NODE_DEBUGGER_TIMEOUT = 200;
 var common = require('../common');
 var assert = require('assert');
 var spawn = require('child_process').spawn;
@@ -155,7 +156,8 @@ setTimeout(function() {
     err = err + '. Expected: ' + expected[0].lines.shift();
   }
   quit();
-  child.kill('SIGKILL');
+  child.kill('SIGINT');
+  child.kill('SIGTERM');
 
   // give the sigkill time to work.
   setTimeout(function() {

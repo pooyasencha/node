@@ -33,6 +33,10 @@ BENCHMARK_DECLARE (tcp_pump1_client)
 BENCHMARK_DECLARE (pipe_pump100_client)
 BENCHMARK_DECLARE (pipe_pump1_client)
 
+BENCHMARK_DECLARE (tcp_multi_accept2)
+BENCHMARK_DECLARE (tcp_multi_accept4)
+BENCHMARK_DECLARE (tcp_multi_accept8)
+
 /* Run until X packets have been sent/received. */
 BENCHMARK_DECLARE (udp_pummel_1v1)
 BENCHMARK_DECLARE (udp_pummel_1v10)
@@ -69,6 +73,7 @@ BENCHMARK_DECLARE (async_pummel_4)
 BENCHMARK_DECLARE (async_pummel_8)
 BENCHMARK_DECLARE (spawn)
 BENCHMARK_DECLARE (thread_create)
+BENCHMARK_DECLARE (million_async)
 BENCHMARK_DECLARE (million_timers)
 HELPER_DECLARE    (tcp4_blackhole_server)
 HELPER_DECLARE    (tcp_pump_server)
@@ -112,6 +117,10 @@ TASK_LIST_START
   BENCHMARK_ENTRY  (pipe_pound_1000)
   BENCHMARK_HELPER (pipe_pound_1000, pipe_echo_server)
 
+  BENCHMARK_ENTRY  (tcp_multi_accept2)
+  BENCHMARK_ENTRY  (tcp_multi_accept4)
+  BENCHMARK_ENTRY  (tcp_multi_accept8)
+
   BENCHMARK_ENTRY  (udp_pummel_1v1)
   BENCHMARK_ENTRY  (udp_pummel_1v10)
   BENCHMARK_ENTRY  (udp_pummel_1v100)
@@ -149,5 +158,6 @@ TASK_LIST_START
 
   BENCHMARK_ENTRY  (spawn)
   BENCHMARK_ENTRY  (thread_create)
+  BENCHMARK_ENTRY  (million_async)
   BENCHMARK_ENTRY  (million_timers)
 TASK_LIST_END

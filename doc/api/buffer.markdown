@@ -40,6 +40,17 @@ encoding method.  Here are the different string encodings.
 
 * `'hex'` - Encode each byte as two hexadecimal characters.
 
+A `Buffer` object can also be used with typed arrays.  The buffer object is
+cloned to an `ArrayBuffer` that is used as the backing store for the typed
+array.  The memory of the buffer and the `ArrayBuffer` is not shared.
+
+NOTE: Node.js v0.8 simply retained a reference to the buffer in `array.buffer`
+instead of cloning it.
+
+While more efficient, it introduces subtle incompatibilities with the typed
+arrays specification.  `ArrayBuffer#slice()` and `Buffer#slice()` behave
+differently when passed negative indices, for example.
+
 ## Class: Buffer
 
 The Buffer class is a global type for dealing with binary data directly.
@@ -107,6 +118,25 @@ Decodes and returns a string from buffer data encoded with `encoding`
 
 See `buffer.write()` example, above.
 
+
+### buf.toJSON()
+
+Returns a JSON-representation of the Buffer instance, which is identical to the
+output for JSON Arrays. `JSON.stringify` implicitly calls this function when
+stringifying a Buffer instance.
+
+Example:
+
+    var buf = new Buffer('test');
+    var json = JSON.stringify(buf);
+
+    console.log(json);
+    // '[116,101,115,116]'
+
+    var copy = new Buffer(JSON.parse(json));
+
+    console.log(copy);
+    // <Buffer 74 65 73 74>
 
 ### buf[index]
 
@@ -202,6 +232,9 @@ buffer object.  It does not change when the contents of the buffer are changed.
 Does copy between buffers. The source and target regions can be overlapped.
 `targetStart` and `sourceStart` default to `0`.
 `sourceEnd` defaults to `buffer.length`.
+
+All values passed that are `undefined`/`NaN` or are out of bounds are set equal
+to their respective defaults.
 
 Example: build two Buffers, then copy `buf1` from byte 16 through byte 19
 into `buf2`, starting at the 8th byte in `buf2`.
@@ -590,7 +623,7 @@ complement signed integer into `buffer`.
 * `noAssert` Boolean, Optional, Default: false
 
 Writes `value` to the buffer at the specified offset with specified endian
-format. Note, `value` must be a valid 32 bit float.
+format. Note, behavior is unspecified if `value` is not a 32 bit float.
 
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be

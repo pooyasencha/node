@@ -19,9 +19,6 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 if (!process.versions.openssl) {
   console.error('Skipping because node compiled without OpenSSL.');
   process.exit(0);
@@ -37,6 +34,7 @@ var https = require('https');
 
 var proxyPort = common.PORT + 1;
 var gotRequest = false;
+var errorCount = 0;
 
 var key = fs.readFileSync(common.fixturesDir + '/keys/agent1-key.pem');
 var cert = fs.readFileSync(common.fixturesDir + '/keys/agent1-cert.pem');
@@ -150,7 +148,8 @@ proxy.listen(proxyPort, function() {
       key: key,
       cert: cert,
       socket: socket,  // reuse the socket
-      agent: false
+      agent: false,
+      rejectUnauthorized: false
     }, function(res) {
       assert.equal(200, res.statusCode);
 
@@ -164,10 +163,13 @@ proxy.listen(proxyPort, function() {
         proxy.close();
         server.close();
       });
+    }).on('error', function() {
+      errorCount++;
     }).end();
   }
 });
 
 process.on('exit', function() {
   assert.ok(gotRequest);
+  assert.equal(errorCount, 1);
 });
